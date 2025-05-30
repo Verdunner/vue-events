@@ -6,6 +6,7 @@
                     <label for="price" class="controls__label">Цена </label>
                     <input
                         v-model.number="model.price"
+                        @input="(e) => onInput(e, 'price')"
                         class="controls__input"
                         type="number"
                         name="price"
@@ -17,6 +18,7 @@
                     <label for="qty" class="controls__label">Количество </label>
                     <input
                         v-model.number="model.qty"
+                        @input="(e) => onInput(e, 'qty')"
                         class="controls__input"
                         type="number"
                         name="qty"
@@ -28,6 +30,7 @@
                     <label for="amount" class="controls__label">Сумма </label>
                     <input
                         v-model.number="model.amount"
+                        @input="(e) => onInput(e, 'amount')"
                         class="controls__input"
                         type="number"
                         name="amount"
@@ -35,10 +38,7 @@
                         placeholder="сумма"
                     />
                 </div>
-                <button
-                    @click="handleClick"
-                    class="controls__item controls__item--btn"
-                >
+                <button @click="handleClick" class="controls__item--btn">
                     Отправить
                 </button>
             </div>
@@ -46,9 +46,13 @@
                 <span class="labels__item">{{ model.price }}</span>
                 <span class="labels__item">{{ model.qty }}</span>
                 <span class="labels__item">{{ model.amount }}</span>
-                <div class="labels__item labels__item--local-storage">
-                    {{ jsonFromLocalStorage }}
-                </div>
+                <pre class="labels__item--local-storage">
+                    {{
+                        parsedJson
+                            ? JSON.stringify(parsedJson, null, 2)
+                            : 'Некорректный JSON'
+                    }}
+                </pre>
             </div>
         </div>
         <div class="container__bottom">
@@ -56,9 +60,14 @@
                 <div
                     v-for="(event, index) in events"
                     :key="index"
-                    class="event"
+                    :class="['event', { 'event--colored': index % 2 === 0 }]"
                 >
-                    {{ event }}
+                    <span class="events__text">
+                        {{ event.split('+')[0] }}
+                    </span>
+                    <span class="events__text">
+                        {{ event.split('+')[1] }}
+                    </span>
                 </div>
             </div>
         </div>
@@ -66,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, onMounted, ref, watch } from 'vue';
+import { reactive, onMounted, ref, computed } from 'vue';
 
 const model = reactive({
     counter: 0,
@@ -77,71 +86,103 @@ const model = reactive({
 
 const jsonFromLocalStorage = ref('');
 const events = ref<string[]>([]);
+
 type Field = 'price' | 'qty' | 'amount';
-const changedOrder = ref<Field[]>([]);
+const changedOrder = ref<Field[]>(['price', 'qty', 'amount']);
+
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+const lastChangedField = ref<Field | null>(null);
+let lastValue = 0;
+
+const parsedJson = computed(() => {
+    try {
+        return JSON.parse(jsonFromLocalStorage.value);
+    } catch {
+        return null;
+    }
+});
+
+function onInput(event: Event, field: Field) {
+    const target = event.target as HTMLInputElement | null;
+    if (!target) return;
+    const value = Number(target.value);
+    handleInputDebounced(field, value);
+}
+
+function handleInputDebounced(field: Field, value: number) {
+    lastChangedField.value = field;
+    lastValue = value;
+
+    if (debounceTimer) clearTimeout(debounceTimer);
+
+    debounceTimer = setTimeout(() => {
+        model[field] = lastValue;
+        addEvent('Инпут изменен после дебаунса');
+        recalculate(field);
+    }, 300);
+}
 
 function addEvent(message: string) {
     events.value.unshift(message);
 }
-function handleClick() {
-    addEvent('Вы нажали на кнопку');
-}
 
-function updateChangedOrder(field: Field) {
-    const idx = changedOrder.value.indexOf(field);
-    if (idx !== -1) {
-        changedOrder.value.splice(idx, 1);
-    }
-    changedOrder.value.push(field);
+async function handleClick() {
+    addEvent(
+        `Отправлено: ${JSON.stringify(model)}+Текущий localStorage: ${
+            localStorage.getItem('formData') ?? ''
+        }`
+    );
+
+    const result = await sendData(model);
+
+    addEvent(
+        `Ответ бекенда: ${JSON.stringify(result)}+Текущий localStorage: ${
+            localStorage.getItem('formData') ?? ''
+        }`
+    );
+
+    jsonFromLocalStorage.value = localStorage.getItem('formData') ?? '{}';
 }
 
 function recalculate(changedField: Field) {
-    updateChangedOrder(changedField);
+    const index = changedOrder.value.indexOf(changedField);
+    if (index !== -1) {
+        changedOrder.value.splice(index, 1);
+    }
+    changedOrder.value.push(changedField);
 
-    const fields: Field[] = ['price', 'qty', 'amount'];
-    const { price, qty, amount } = model;
+    const [toRecalculate] = changedOrder.value;
 
-    if (changedOrder.value.length < 2) return;
-
-    const [first, second] = changedOrder.value.slice(-2);
-    const remaining = fields.find((f) => f !== first && f !== second);
-
-    if (!remaining) return;
-
-    switch (remaining) {
-        case 'price':
-            model.price = qty !== 0 ? amount / qty : 0;
-            break;
-        case 'qty':
-            model.qty = price !== 0 ? amount / price : 0;
-            break;
-        case 'amount':
-            model.amount = price * qty;
-            break;
+    if (toRecalculate === 'price') {
+        model.price = model.qty !== 0 ? model.amount / model.qty : 0;
+    } else if (toRecalculate === 'qty') {
+        model.qty = model.price !== 0 ? model.amount / model.price : 0;
+    } else if (toRecalculate === 'amount') {
+        model.amount = model.price * model.qty;
     }
 }
 
-watch(
-    () => model.price,
-    () => {
-        addEvent('Инпут изменен');
-        recalculate('price');
+async function sendData(data: typeof model): Promise<{ success: boolean }> {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    if (data.amount % 2 === 0) {
+        data.counter++;
+
+        localStorage.setItem(
+            'formData',
+            JSON.stringify({
+                counter: data.counter,
+                price: data.price,
+                qty: data.qty,
+                amount: data.amount,
+            })
+        );
+
+        return { success: true };
+    } else {
+        return { success: false };
     }
-);
-watch(
-    () => model.qty,
-    () => {
-        addEvent('Инпут изменен');
-        recalculate('qty');
-    }
-);
-watch(
-    () => model.amount,
-    () => {
-        addEvent('Инпут изменен');
-        recalculate('amount');
-    }
-);
+}
 
 onMounted(() => {
     const savedData = localStorage.getItem('formData');
@@ -157,6 +198,8 @@ onMounted(() => {
         } catch (e) {
             console.warn('Ошибка при чтении данных из localStorage', e);
         }
+    } else {
+        jsonFromLocalStorage.value = '{}';
     }
 });
 </script>
@@ -166,45 +209,70 @@ onMounted(() => {
     display: flex;
     flex-direction: column;
     align-items: center;
+    overflow: hidden;
 
-    width: 100%;
-    min-height: 80vh;
-    padding: 50px;
-    background-color: slategray;
+    max-width: 100vw;
+    min-height: 95vh;
+    padding: 30px 30px 0;
+    margin: 0 auto;
+    font-family: Arial, sans-serif;
+    background-color: rgb(230, 230, 230);
 
     &__top,
     &__bottom {
         width: 80vw;
-        border: 1px solid red;
+        min-height: 100px;
+        overflow: hidden;
     }
 }
 
 .controls,
 .labels {
     display: flex;
-    margin-bottom: 20px;
 }
 
 .controls__item,
 .labels__item {
     display: flex;
     flex-direction: column;
-    align-items: center;
     justify-content: center;
-    flex-basis: 15vw;
-    flex-grow: 0;
-    padding: 10px;
+    overflow: hidden;
+    text-align: center;
+
+    width: percentage(1 / 6);
+    padding: 5px 10px;
     font-size: 20px;
-    border: 1px solid greenyellow;
 }
 
-.controls__item--btn,
+.controls__item--btn {
+    width: 200px;
+    height: 50px;
+    margin: auto;
+
+    font-size: 18px;
+    border: none;
+    border-radius: 10px;
+    background-color: #646cff;
+
+    &:hover {
+        cursor: pointer;
+        background-color: rgba(#646cff, 0.7);
+    }
+
+    &:active {
+        border: 1px solid #646cff;
+        background-color: rgba(#646cff, 0.5);
+    }
+}
 .labels__item--local-storage {
-    flex-basis: 20vw;
-    flex-grow: 1;
+    width: 200px;
+    min-height: 50px;
+    padding: 0 20px;
+    margin: 0;
 }
 
 .controls__input {
+    min-width: 50px;
     padding: 10px;
     font-size: 16px;
 }
@@ -212,15 +280,20 @@ onMounted(() => {
 .events {
     display: flex;
     flex-direction: column;
+    min-height: 100px;
     gap: 10px;
     padding: 20px;
 }
 
 .event {
-    background-color: green;
-    color: white;
+    display: flex;
+    flex-direction: column;
     padding: 10px;
     border-radius: 5px;
-    font-weight: bold;
+    background-color: #646cff;
+
+    &--colored {
+        background-color: #9a9fff;
+    }
 }
 </style>
