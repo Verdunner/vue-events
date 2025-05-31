@@ -6,7 +6,7 @@
                     <label for="price" class="controls__label">Цена </label>
                     <input
                         v-model.number="model.price"
-                        @input="(e) => onInput(e, 'price')"
+                        @input="(e) => onInputWithLogic(e, 'price')"
                         class="controls__input"
                         type="number"
                         name="price"
@@ -18,7 +18,7 @@
                     <label for="qty" class="controls__label">Количество </label>
                     <input
                         v-model.number="model.qty"
-                        @input="(e) => onInput(e, 'qty')"
+                        @input="(e) => onInputWithLogic(e, 'qty')"
                         class="controls__input"
                         type="number"
                         name="qty"
@@ -30,7 +30,7 @@
                     <label for="amount" class="controls__label">Сумма </label>
                     <input
                         v-model.number="model.amount"
-                        @input="(e) => onInput(e, 'amount')"
+                        @input="(e) => onInputWithLogic(e, 'amount')"
                         class="controls__input"
                         type="number"
                         name="amount"
@@ -47,11 +47,7 @@
                 <span class="labels__item">{{ model.qty }}</span>
                 <span class="labels__item">{{ model.amount }}</span>
                 <pre class="labels__item--local-storage">
-                    {{
-                        parsedJson
-                            ? JSON.stringify(parsedJson, null, 2)
-                            : 'Некорректный JSON'
-                    }}
+                    {{ localStorageView }}
                 </pre>
             </div>
         </div>
@@ -60,7 +56,10 @@
                 <div
                     v-for="(event, index) in events"
                     :key="index"
-                    :class="['event', { 'event--colored': index % 2 === 0 }]"
+                    :class="[
+                        'event',
+                        { 'event--colored': (events.length - index) % 2 === 0 },
+                    ]"
                 >
                     <span class="events__text">
                         {{ event.split('+')[0] }}
@@ -75,133 +74,25 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, onMounted, ref, computed } from 'vue';
+import { useFormModel } from '@/hooks/useFormModel.ts';
+import { useRecalculate } from '@/hooks/useRecalculate.ts';
+import { useEvents } from '@/hooks/useEvents.ts';
+import { useLocalStorage } from '@/hooks/useLocalStorage.ts';
+import { useSubmit } from '@/hooks/useSubmit.ts';
 
-const model = reactive({
-    counter: 0,
-    price: 0,
-    qty: 0,
-    amount: 0,
-});
-
-const jsonFromLocalStorage = ref('');
-const events = ref<string[]>([]);
+const { model, onInput } = useFormModel();
+const { recalculate } = useRecalculate(model);
+const { events, addEvent } = useEvents();
+const { localStorageView, saveToLocalStorage } = useLocalStorage(model);
+const { handleClick } = useSubmit(model, addEvent, saveToLocalStorage);
 
 type Field = 'price' | 'qty' | 'amount';
-const changedOrder = ref<Field[]>(['price', 'qty', 'amount']);
-
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-const lastChangedField = ref<Field | null>(null);
-let lastValue = 0;
-
-const parsedJson = computed(() => {
-    try {
-        return JSON.parse(jsonFromLocalStorage.value);
-    } catch {
-        return null;
-    }
-});
-
-function onInput(event: Event, field: Field) {
-    const target = event.target as HTMLInputElement | null;
-    if (!target) return;
-    const value = Number(target.value);
-    handleInputDebounced(field, value);
+function onInputWithLogic(event: Event, field: Field) {
+    onInput(event, field, (changedField) => {
+        addEvent(`Инпут "${changedField}" изменен после дебаунса`);
+        recalculate(changedField);
+    });
 }
-
-function handleInputDebounced(field: Field, value: number) {
-    lastChangedField.value = field;
-    lastValue = value;
-
-    if (debounceTimer) clearTimeout(debounceTimer);
-
-    debounceTimer = setTimeout(() => {
-        model[field] = lastValue;
-        addEvent('Инпут изменен после дебаунса');
-        recalculate(field);
-    }, 300);
-}
-
-function addEvent(message: string) {
-    events.value.unshift(message);
-}
-
-async function handleClick() {
-    addEvent(
-        `Отправлено: ${JSON.stringify(model)}+Текущий localStorage: ${
-            localStorage.getItem('formData') ?? ''
-        }`
-    );
-
-    const result = await sendData(model);
-
-    addEvent(
-        `Ответ бекенда: ${JSON.stringify(result)}+Текущий localStorage: ${
-            localStorage.getItem('formData') ?? ''
-        }`
-    );
-
-    jsonFromLocalStorage.value = localStorage.getItem('formData') ?? '{}';
-}
-
-function recalculate(changedField: Field) {
-    const index = changedOrder.value.indexOf(changedField);
-    if (index !== -1) {
-        changedOrder.value.splice(index, 1);
-    }
-    changedOrder.value.push(changedField);
-
-    const [toRecalculate] = changedOrder.value;
-
-    if (toRecalculate === 'price') {
-        model.price = model.qty !== 0 ? model.amount / model.qty : 0;
-    } else if (toRecalculate === 'qty') {
-        model.qty = model.price !== 0 ? model.amount / model.price : 0;
-    } else if (toRecalculate === 'amount') {
-        model.amount = model.price * model.qty;
-    }
-}
-
-async function sendData(data: typeof model): Promise<{ success: boolean }> {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    if (data.amount % 2 === 0) {
-        data.counter++;
-
-        localStorage.setItem(
-            'formData',
-            JSON.stringify({
-                counter: data.counter,
-                price: data.price,
-                qty: data.qty,
-                amount: data.amount,
-            })
-        );
-
-        return { success: true };
-    } else {
-        return { success: false };
-    }
-}
-
-onMounted(() => {
-    const savedData = localStorage.getItem('formData');
-    if (savedData) {
-        try {
-            const parsed = JSON.parse(savedData);
-            model.counter = parsed.counter ?? model.counter;
-            model.price = parsed.price ?? model.price;
-            model.qty = parsed.qty ?? model.qty;
-            model.amount = parsed.amount ?? model.amount;
-
-            jsonFromLocalStorage.value = JSON.stringify(parsed, null, 2);
-        } catch (e) {
-            console.warn('Ошибка при чтении данных из localStorage', e);
-        }
-    } else {
-        jsonFromLocalStorage.value = '{}';
-    }
-});
 </script>
 
 <style scoped lang="scss">
