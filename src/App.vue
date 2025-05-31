@@ -74,6 +74,7 @@
 </template>
 
 <script setup lang="ts">
+import type { TypeField } from '@/types';
 import { useFormModel } from '@/hooks/useFormModel.ts';
 import { useRecalculate } from '@/hooks/useRecalculate.ts';
 import { useEvents } from '@/hooks/useEvents.ts';
@@ -83,11 +84,16 @@ import { useSubmit } from '@/hooks/useSubmit.ts';
 const { model, onInput } = useFormModel();
 const { recalculate } = useRecalculate(model);
 const { events, addEvent } = useEvents();
-const { localStorageView, saveToLocalStorage } = useLocalStorage(model);
-const { handleClick } = useSubmit(model, addEvent, saveToLocalStorage);
 
-type Field = 'price' | 'qty' | 'amount';
-function onInputWithLogic(event: Event, field: Field) {
+const { localStorageView, saveToLocalStorage } = useLocalStorage(model);
+const { handleClick } = useSubmit(
+    model,
+    addEvent,
+    saveToLocalStorage,
+    () => localStorageView.value
+);
+
+function onInputWithLogic(event: Event, field: TypeField) {
     onInput(event, field, (changedField) => {
         addEvent(`Инпут "${changedField}" изменен после дебаунса`);
         recalculate(changedField);
@@ -130,7 +136,7 @@ function onInputWithLogic(event: Event, field: Field) {
     overflow: hidden;
     text-align: center;
 
-    width: percentage(1 / 6);
+    width: 16%;
     padding: 5px 10px;
     font-size: 20px;
 }

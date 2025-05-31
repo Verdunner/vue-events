@@ -1,5 +1,5 @@
 import { reactive } from 'vue';
-type Field = 'price' | 'qty' | 'amount';
+import type { TypeField } from '@/types';
 
 export function useFormModel() {
     const model = reactive({
@@ -14,8 +14,8 @@ export function useFormModel() {
 
     function onInput(
         event: Event,
-        field: Field,
-        callback: (field: Field) => void
+        field: TypeField,
+        callback: (field: TypeField) => void
     ) {
         const target = event.target as HTMLInputElement | null;
         if (!target) return;

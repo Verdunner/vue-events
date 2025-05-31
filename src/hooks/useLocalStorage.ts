@@ -1,53 +1,55 @@
-import { ref, onMounted, computed } from 'vue';
+import { onMounted, ref } from 'vue';
 
-export function useLocalStorage(model: any, key = 'formData') {
-    const localStorageString = ref('{}');
+export function useLocalStorage(
+    model: any,
+    key = 'formData',
+    fields: string[] = []
+) {
+    const localStorageView = ref('{}');
 
-    const beautifiedLocalStorageString = computed(() => {
+    function updateLocalStorageView() {
         try {
-            const parsed = JSON.parse(localStorageString.value);
-            const beautified = JSON.stringify(parsed, null, 2);
-            return beautified;
+            const saved = localStorage.getItem(key);
+            localStorageView.value = saved
+                ? JSON.stringify(JSON.parse(saved), null, 2)
+                : '{}';
         } catch (e) {
-            console.log('error: ', e);
-            return '{}';
+            console.error('Invalid JSON in localStorage:', e);
+            localStorageView.value = '{}';
         }
-    });
+    }
 
     onMounted(() => {
-        const savedDataString = localStorage.getItem(key);
-        if (savedDataString) {
+        const saved = localStorage.getItem(key);
+        if (saved) {
             try {
-                const parsed = JSON.parse(savedDataString);
-                model.counter = parsed.counter ?? model.counter;
-                model.price = parsed.price ?? model.price;
-                model.qty = parsed.qty ?? model.qty;
-                model.amount = parsed.amount ?? model.amount;
-
-                localStorageString.value = savedDataString;
+                const parsed = JSON.parse(saved);
+                (fields.length ? fields : Object.keys(parsed)).forEach(
+                    (field) => {
+                        if (field in parsed) {
+                            model[field] = parsed[field];
+                        }
+                    }
+                );
             } catch (e) {
-                localStorageString.value = '{}';
+                console.error('Failed to parse saved data:', e);
             }
-        } else {
-            localStorageString.value = '{}';
         }
+        updateLocalStorageView();
     });
 
     function saveToLocalStorage() {
-        localStorage.setItem(
-            key,
-            JSON.stringify({
-                counter: model.counter,
-                price: model.price,
-                qty: model.qty,
-                amount: model.amount,
-            })
-        );
-        localStorageString.value = localStorage.getItem(key) ?? '{}';
+        const data: Record<string, any> = {};
+        (fields.length ? fields : Object.keys(model)).forEach((field) => {
+            data[field] = model[field];
+        });
+
+        localStorage.setItem(key, JSON.stringify(data));
+        updateLocalStorageView();
     }
 
     return {
-        localStorageView: beautifiedLocalStorageString,
+        localStorageView,
         saveToLocalStorage,
     };
 }

@@ -1,7 +1,8 @@
 export function useSubmit(
     model: any,
     addEvent: (msg: string) => void,
-    saveToLocalStorage: () => void
+    saveToLocalStorage: () => void,
+    getLocalStorageSnapshot: () => string
 ) {
     async function sendData(data: typeof model): Promise<{ success: boolean }> {
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -16,18 +17,18 @@ export function useSubmit(
     }
 
     async function handleClick() {
+        const snapshotBefore = getLocalStorageSnapshot();
         addEvent(
-            `Отправлено: ${JSON.stringify(model)}+Текущий localStorage: ${
-                localStorage.getItem('formData') ?? ''
-            }`
+            `Отправлено: ${JSON.stringify(
+                model
+            )}+Текущий localStorage: ${snapshotBefore}`
         );
-
         const result = await sendData(model);
-
+        const snapshotAfter = getLocalStorageSnapshot();
         addEvent(
-            `Ответ бекенда: ${JSON.stringify(result)}+Текущий localStorage: ${
-                localStorage.getItem('formData') ?? ''
-            }`
+            `Ответ бекенда: ${JSON.stringify(
+                result
+            )}+Текущий localStorage: ${snapshotAfter}`
         );
     }
 

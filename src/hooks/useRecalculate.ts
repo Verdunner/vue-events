@@ -1,10 +1,10 @@
 import { ref } from 'vue';
-type Field = 'price' | 'qty' | 'amount';
+import type { TypeField } from '@/types';
 
 export function useRecalculate(model: any) {
-    const changedOrder = ref<Field[]>(['price', 'qty', 'amount']);
+    const changedOrder = ref<TypeField[]>(['price', 'qty', 'amount']);
 
-    function recalculate(changedField: Field) {
+    function recalculate(changedField: TypeField) {
         const index = changedOrder.value.indexOf(changedField);
         if (index !== -1) changedOrder.value.splice(index, 1);
         changedOrder.value.push(changedField);
