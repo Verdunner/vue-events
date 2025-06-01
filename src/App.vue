@@ -1,12 +1,12 @@
 <template>
     <div class="container">
         <div class="container__top">
-            <div class="controls">
+            <form @submit.prevent="onSubmit" class="controls">
                 <div class="controls__item">
                     <label for="price" class="controls__label">Цена </label>
                     <input
                         v-model.number="model.price"
-                        @input="(e) => onInputWithLogic(e, 'price')"
+                        @input="(e) => onInput(e, 'price')"
                         class="controls__input"
                         type="number"
                         name="price"
@@ -18,7 +18,7 @@
                     <label for="qty" class="controls__label">Количество </label>
                     <input
                         v-model.number="model.qty"
-                        @input="(e) => onInputWithLogic(e, 'qty')"
+                        @input="(e) => onInput(e, 'qty')"
                         class="controls__input"
                         type="number"
                         name="qty"
@@ -30,7 +30,7 @@
                     <label for="amount" class="controls__label">Сумма </label>
                     <input
                         v-model.number="model.amount"
-                        @input="(e) => onInputWithLogic(e, 'amount')"
+                        @input="(e) => onInput(e, 'amount')"
                         class="controls__input"
                         type="number"
                         name="amount"
@@ -38,10 +38,10 @@
                         placeholder="сумма"
                     />
                 </div>
-                <button @click="handleClick" class="controls__item--btn">
+                <button type="submit" class="controls__item--btn">
                     Отправить
                 </button>
-            </div>
+            </form>
             <div class="labels">
                 <span class="labels__item">{{ model.price }}</span>
                 <span class="labels__item">{{ model.qty }}</span>
@@ -74,31 +74,21 @@
 </template>
 
 <script setup lang="ts">
-import type { TypeField } from '@/types';
 import { useFormModel } from '@/hooks/useFormModel.ts';
-import { useRecalculate } from '@/hooks/useRecalculate.ts';
 import { useEvents } from '@/hooks/useEvents.ts';
 import { useLocalStorage } from '@/hooks/useLocalStorage.ts';
 import { useSubmit } from '@/hooks/useSubmit.ts';
 
-const { model, onInput } = useFormModel();
-const { recalculate } = useRecalculate(model);
 const { events, addEvent } = useEvents();
+const { model, onInput } = useFormModel(addEvent);
 
 const { localStorageView, saveToLocalStorage } = useLocalStorage(model);
-const { handleClick } = useSubmit(
+const { onSubmit } = useSubmit(
     model,
     addEvent,
     saveToLocalStorage,
     () => localStorageView.value
 );
-
-function onInputWithLogic(event: Event, field: TypeField) {
-    onInput(event, field, (changedField) => {
-        addEvent(`Инпут "${changedField}" изменен после дебаунса`);
-        recalculate(changedField);
-    });
-}
 </script>
 
 <style scoped lang="scss">

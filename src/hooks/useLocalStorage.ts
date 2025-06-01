@@ -1,15 +1,14 @@
 import { onMounted, ref } from 'vue';
+import type { TypeFormModel } from '@/types';
 
-export function useLocalStorage(
-    model: any,
-    key = 'formData',
-    fields: string[] = []
-) {
+export function useLocalStorage(model: TypeFormModel) {
+    const LOCAL_STORAGE_KEY = 'formData';
+    const FIELDS = ['price', 'qty', 'amount', 'counter'] as const;
     const localStorageView = ref('{}');
 
     function updateLocalStorageView() {
         try {
-            const saved = localStorage.getItem(key);
+            const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
             localStorageView.value = saved
                 ? JSON.stringify(JSON.parse(saved), null, 2)
                 : '{}';
@@ -20,17 +19,15 @@ export function useLocalStorage(
     }
 
     onMounted(() => {
-        const saved = localStorage.getItem(key);
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                (fields.length ? fields : Object.keys(parsed)).forEach(
-                    (field) => {
-                        if (field in parsed) {
-                            model[field] = parsed[field];
-                        }
+                for (const field of FIELDS) {
+                    if (field in parsed) {
+                        model[field] = parsed[field];
                     }
-                );
+                }
             } catch (e) {
                 console.error('Failed to parse saved data:', e);
             }
@@ -39,12 +36,12 @@ export function useLocalStorage(
     });
 
     function saveToLocalStorage() {
-        const data: Record<string, any> = {};
-        (fields.length ? fields : Object.keys(model)).forEach((field) => {
+        const data: Partial<TypeFormModel> = {};
+        for (const field of FIELDS) {
             data[field] = model[field];
-        });
+        }
 
-        localStorage.setItem(key, JSON.stringify(data));
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
         updateLocalStorageView();
     }
 

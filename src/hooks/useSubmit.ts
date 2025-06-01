@@ -1,5 +1,7 @@
+import type { TypeFormModel } from '@/types';
+
 export function useSubmit(
-    model: any,
+    model: TypeFormModel,
     addEvent: (msg: string) => void,
     saveToLocalStorage: () => void,
     getLocalStorageSnapshot: () => string
@@ -16,7 +18,7 @@ export function useSubmit(
         }
     }
 
-    async function handleClick() {
+    async function onSubmit() {
         const snapshotBefore = getLocalStorageSnapshot();
         addEvent(
             `Отправлено: ${JSON.stringify(
@@ -32,5 +34,5 @@ export function useSubmit(
         );
     }
 
-    return { handleClick };
+    return { onSubmit };
 }
